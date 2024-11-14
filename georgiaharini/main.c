@@ -1,20 +1,11 @@
 /**
   ******************************************************************************
-  * @file    main.c
-  * @author  Weili An, Niraj Menon
-  * @date    Feb 7, 2024
-  * @brief   ECE 362 Lab 7 student template
+  * Code for game logic
+  * currently creates randomly generated boxes 
+  * moves and tracks cursor 
+  * used 2 buttons to test cursor implementation before we had joystick
   ******************************************************************************
 */
-
-/*******************************************************************************/
-
-// Fill out your username!  Even though we're not using an autotest, 
-// it should be a habit to fill out your username in this field now.
-const char* username = "griff323";
-
-/*******************************************************************************/ 
-
 #include "stm32f0xx.h"
 #include <stdint.h>
 
