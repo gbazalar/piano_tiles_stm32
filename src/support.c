@@ -100,7 +100,7 @@ char queue[2];  // A two-entry queue of button press/release events.
 int qin;        // Which queue entry is next for input
 int qout;       // Which queue entry is next for output
 
-const char keymap[] = "DCBA#9630852*741";
+// const char keymap[] = "DCBA#9630852*741";
 
 void push_queue(int n) {
     queue[qin] = n;
@@ -114,17 +114,17 @@ char pop_queue() {
     return tmp;
 }
 
-void update_history(int c, int rows)
-{
-    // We used to make students do this in assembly language.
-    for(int i = 0; i < 4; i++) {
-        hist[4*c+i] = (hist[4*c+i]<<1) + ((rows>>i)&1);
-        if (hist[4*c+i] == 0x01)
-            push_queue(0x80 | keymap[4*c+i]);
-        if (hist[4*c+i] == 0xfe)
-            push_queue(keymap[4*c+i]);
-    }
-}
+// void update_history(int c, int rows)
+// {
+//     // We used to make students do this in assembly language.
+//     for(int i = 0; i < 4; i++) {
+//         hist[4*c+i] = (hist[4*c+i]<<1) + ((rows>>i)&1);
+//         if (hist[4*c+i] == 0x01)
+//             push_queue(0x80 | keymap[4*c+i]);
+//         if (hist[4*c+i] == 0xfe)
+//             push_queue(keymap[4*c+i]);
+//     }
+// }
 
 // void drive_column(int c)
 // {

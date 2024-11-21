@@ -18,6 +18,118 @@ const char* username = "griff323";
 #include "stm32f0xx.h"
 #include <stdint.h>
 
+/////
+#include <stdio.h>
+#include "fifo.h"
+#include "tty.h"
+
+void init_usart5() {
+    // TODO
+    RCC->AHBENR |= RCC_AHBENR_GPIOCEN | RCC_AHBENR_GPIODEN;
+    GPIOC->MODER &= ~GPIO_MODER_MODER12;
+    GPIOC->MODER |= GPIO_MODER_MODER12_1;
+    GPIOD->MODER &= ~GPIO_MODER_MODER2;
+    GPIOD->MODER |= GPIO_MODER_MODER2_1;
+
+    GPIOC->AFR[1] &= ~(0xf << (4*(12-8))); 
+    GPIOC->AFR[1] |= (0x2 << (4*(12-8)));
+    GPIOD->AFR[0] &= ~(0xf << (4*(2))); 
+    GPIOD->AFR[0] |= (0x2 << (4*(2))); 
+
+    RCC->APB1ENR |= RCC_APB1ENR_USART5EN;
+
+    USART5->CR1 &= ~USART_CR1_UE;
+    USART5->CR1 &= ~(USART_CR1_M1 | USART_CR1_M0);
+    USART5->CR2 &= ~USART_CR2_STOP;
+    USART5->CR1 &= ~USART_CR1_PCE;
+    USART5->CR1 &= ~USART_CR1_OVER8;
+    USART5->BRR = 0x1A1;
+    USART5->CR1 |= (USART_CR1_TE | USART_CR1_RE);
+    USART5->CR1 |= USART_CR1_UE;
+
+    while(!(USART5->ISR & USART_ISR_REACK) && !(USART5->ISR & USART_ISR_TEACK));
+    
+}
+
+
+
+// TODO DMA data structures
+#define FIFOSIZE 16
+char serfifo[FIFOSIZE];
+int seroffset = 0;
+
+void enable_tty_interrupt(void) {
+    // TODO
+    USART5->CR1 |= USART_CR1_RXNEIE;
+    USART5->CR3 |= USART_CR3_DMAR; 
+    NVIC->ISER[0] |= (1<< USART3_8_IRQn);
+    
+
+    RCC->AHBENR |= RCC_AHBENR_DMA2EN;
+    DMA2->CSELR |= DMA2_CSELR_CH2_USART5_RX;
+    DMA2_Channel2->CCR &= ~DMA_CCR_EN;
+
+    DMA2_Channel2->CMAR = (uint32_t)serfifo;
+    DMA2_Channel2->CPAR = (uint32_t)&(USART5->RDR);
+    DMA2_Channel2->CNDTR = FIFOSIZE;
+    DMA2_Channel2->CCR &= ~DMA_CCR_DIR;
+    DMA2_Channel2->CCR &= ~DMA_CCR_TCIE;
+    DMA2_Channel2->CCR &= ~DMA_CCR_HTIE;
+    DMA2_Channel2->CCR &= ~DMA_CCR_MSIZE;
+    DMA2_Channel2->CCR &= ~DMA_CCR_PSIZE;
+    DMA2_Channel2->CCR |= DMA_CCR_MINC;
+    DMA2_Channel2->CCR &= ~DMA_CCR_PINC;
+    DMA2_Channel2->CCR |= DMA_CCR_CIRC;
+    DMA2_Channel2->CCR &= ~DMA_CCR_MEM2MEM;
+    DMA2_Channel2->CCR |= (DMA_CCR_PL_0 | DMA_CCR_PL_1);
+
+    DMA2_Channel2->CCR |= DMA_CCR_EN;
+}
+
+// Works like line_buffer_getchar(), but does not check or clear ORE nor wait on new characters in USART
+char interrupt_getchar() {
+    // TODO
+    
+    USART_TypeDef *u = USART5;
+
+    while(fifo_newline(&input_fifo) == 0) {
+        asm volatile ("wfi"); // wait for an interrupt
+    }
+    char ch = fifo_remove(&input_fifo);
+    return ch;
+
+}
+
+int __io_putchar(int c) {
+    // TODO copy from STEP2
+        if (c == '\n'){
+        while(!(USART5->ISR & USART_ISR_TXE));
+        USART5->TDR = '\r';
+    }
+    
+    while(!(USART5->ISR & USART_ISR_TXE));
+    USART5->TDR = c;
+    return c;
+}
+
+int __io_getchar(void) {
+    // TODO Use interrupt_getchar() instead of line_buffer_getchar()
+    return (interrupt_getchar());
+}
+
+// TODO Copy the content for the USART5 ISR here
+// TODO Remember to look up for the proper name of the ISR function
+void USART3_8_IRQHandler(void) {
+    while(DMA2_Channel2->CNDTR != sizeof serfifo - seroffset) {
+        if (!fifo_full(&input_fifo))
+            insert_echo_char(serfifo[seroffset]);
+        seroffset = (seroffset + 1) % sizeof serfifo;
+    }
+}
+
+
+////
+
 void internal_clock();
 
 #include "lcd.h"
@@ -28,17 +140,17 @@ void internal_clock();
 int i2c_checknack(void);
 void i2c_clearnack(void);
 // DMA data structures
-int seroffset = 0;
+//int seroffset = 0;
 void enable_ports();
 void show_char(int n, char c);
 void drive_column(int c);
 int read_rows();
 char rows_to_key(int rows);
-uint8_t col = 0;
+//uint8_t col = 0;
 char c;
 // Make it easier to access keymap
-extern char keymap;
-char* keymap_arr = &keymap;
+// extern char keymap;
+// char* keymap_arr = &keymap;
 void nano_wait(int t);
 // Font array in assembly file as I am too lazy to convert it into C array
 // extern uint8_t font[];
@@ -73,6 +185,20 @@ void enable_ports() {
   GPIOB->MODER |= 0x0000A000; //set to alt function mode for PB6-7
   GPIOB->AFR[0] |= 0x1 << (6 * 4); //set to AF1
   GPIOB->AFR[0] |= 0x1 << (7 * 4); //set to AF1
+
+    RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
+
+    // Set PC4-PC7 (Columns) as outputs
+    GPIOC->MODER &= ~0x0000FF00; // Clear bits for PC4-PC7
+    GPIOC->MODER |= 0x00005500;  // Set bits to 01 (output mode)
+
+    // Set PC0-PC3 (Rows) as inputs
+    GPIOC->MODER &= ~0x000000FF; // Clear bits for PC0-PC3
+
+    // Enable pull-down resistors on PC0-PC3
+    GPIOC->PUPDR &= ~0x000000FF; // Clear bits for PC0-PC3
+    GPIOC->PUPDR |= 0x000000AA;  // Set bits to 10 (pull-down)
+
 }
 
 // lab 6 stuff:
@@ -395,6 +521,500 @@ void eeprom_read(uint16_t loc, char data[], uint8_t len) {
     // i2c_waitidle();
     i2c_recvdata(EEPROM_ADDR, data, len);
 }
+
+
+/////
+
+//============================================================================
+// PARAMETERS
+//============================================================================
+#include "ff.h"  // FatFs header for file system
+#include "diskio.h"  // Disk I/O driver for FatFs
+
+#define MODE_SD_CARD 0
+#define MODE_SIMPLE_TONE 1
+
+volatile uint8_t audio_mode = MODE_SIMPLE_TONE;  // Default mode: simple tone
+
+
+#define RATE 20000
+
+#define AUDIO_BUFFER_SIZE 8000  // 8000 bytes for a brief audio buffer
+volatile int16_t audio_buffer[AUDIO_BUFFER_SIZE / 2];  // For 16-bit samples
+volatile uint8_t buffer_needs_refill = 0;
+
+
+
+// Define the WAV header structure
+typedef struct {
+    char riff_id[4];        // "RIFF"
+    uint32_t riff_size;
+    char wave_id[4];        // "WAVE"
+    char fmt_id[4];         // "fmt "
+    uint32_t fmt_size;
+    uint16_t audio_format;
+    uint16_t num_channels;
+    uint32_t sample_rate;
+    uint32_t byte_rate;
+    uint16_t block_align;
+    uint16_t bits_per_sample;
+    char data_id[4];        // "data"
+    uint32_t data_size;
+} WAVHeader;
+
+#include <math.h>
+#define N 1000
+#define RATE 24000
+short int wavetable[N];
+int step0 = 0;
+int offset0 = 0;
+int step1 = 0;
+int offset1 = 0;
+
+uint16_t volume_scale = 100;  // 150% volume (adjust as needed)
+
+uint16_t bits_per_sample;
+uint16_t num_channels;
+
+FATFS fs;
+FIL audio_file;
+
+//============================================================================
+// test audio 
+//============================================================================
+
+
+
+void init_wavetable(void) {
+    for(int i=0; i < N; i++)
+        wavetable[i] = 32767 * sin(2 * M_PI * i / N);
+}
+
+
+void set_freq(uint32_t f) {
+    
+    if (f == 0) {
+        step0 = 0;
+        offset0 = 0;
+    } else
+        step0 = (f * N / RATE) * (1<<16);
+
+}
+
+
+//============================================================================
+// setup_dac()
+//============================================================================
+
+
+void setup_dac(void) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // Enable GPIOA clock
+    GPIOA->MODER |= 0x00000300;         // Set PA4 to analog mode
+    RCC->APB1ENR |= RCC_APB1ENR_DACEN;  // Enable DAC clock
+    DAC->CR &= ~DAC_CR_TSEL1;           // Clear TSEL1 bits
+    DAC->CR |= DAC_CR_TEN1;             // Enable DAC trigger
+    DAC->CR |= DAC_CR_EN1;              // Enable DAC channel 1
+    DAC->CR |= DAC_CR_DMAEN1;           // Enable DAC DMA request
+}
+
+
+
+void TIM6_DAC_IRQHandler(void) {
+    TIM6->SR &= ~TIM_SR_UIF;  // Clear interrupt flag
+
+    if (audio_mode == MODE_SIMPLE_TONE) {
+        offset0 += step0;
+        offset1 += step1;
+
+        if (offset0 >= (N << 16)) {
+            offset0 -= (N << 16);
+        }
+        if (offset1 >= (N << 16)) {
+            offset1 -= (N << 16);
+        }
+
+        int samp = wavetable[offset0 >> 16] + wavetable[offset1 >> 16];
+        samp = samp * (2048);
+        samp = (samp >> 17);
+        samp += 2048;
+        DAC->DHR12R1 = samp;
+    }
+}
+
+
+void init_tim6(uint32_t sample_rate) {
+    RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;  // Enable Timer 6 clock
+
+    if (audio_mode == MODE_SIMPLE_TONE) {
+        TIM6->PSC = (48000000 / (RATE * 100)) - 1;
+        TIM6->ARR = 100 - 1;
+    } else if (audio_mode == MODE_SD_CARD) {
+        TIM6->PSC = (48000000 / (sample_rate * 100)) - 1;  // Use the provided sample rate
+        TIM6->ARR = 100 - 1;
+    }
+
+    TIM6->DIER |= TIM_DIER_UIE;         // Enable update interrupt
+    NVIC->ISER[0] = 1 << TIM6_IRQn;     // Enable Timer 6 interrupt in NVIC
+
+    TIM6->CR2 |= TIM_CR2_MMS_1;         // Set TRGO on update event
+    TIM6->CR1 |= TIM_CR1_CEN;           // Start Timer 6
+}
+
+
+
+
+
+// Function to set up the DAC and Timer 6 for generating a simple tone
+void generate_simple_tone(uint32_t frequency) {
+
+    audio_mode = MODE_SIMPLE_TONE;
+
+    // Generate the waveform lookup table
+    init_wavetable();
+   
+    // Set up the DAC
+    setup_dac();
+
+    // Initialize Timer 6 with the calculated sample rate
+    init_tim6(0);
+    
+    // Calculate the sample rate needed for the desired frequency
+    set_freq(frequency);
+
+
+}
+
+void stop_sound(){
+    TIM6->CR1 &= ~TIM_CR1_CEN;      // Start Timer 6 
+
+}
+
+void delay_ms(uint32_t ms) {
+    uint32_t i;
+    while (ms-- > 0) {
+        // Each loop iteration is roughly 1 ms when using a 48 MHz system clock.
+        for (i = 0; i < 4800; i++) {  // Adjust this loop count for your clock speed
+            __asm("nop");             // No-operation instruction to burn time
+        }
+    }
+}
+
+
+
+//============================================================================
+// init_audio_playback()
+//============================================================================
+
+void setup_dma(void) {
+    // Ensure DMA1 Channel 3 is disabled before configuring
+    DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+
+    // Enable the DMA1 clock
+    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+
+    // Set the memory and peripheral addresses
+    DMA1_Channel3->CMAR = (uint32_t)audio_buffer;       // Source: Audio buffer in memory
+    DMA1_Channel3->CPAR = (uint32_t)&DAC->DHR12L1;      // Destination: DAC data register (left-aligned for 16-bit)
+
+    // Configure the number of data items to transfer
+    DMA1_Channel3->CNDTR = AUDIO_BUFFER_SIZE / 2; // Number of 16-bit samples
+
+    // Configure DMA channel settings
+    DMA1_Channel3->CCR |= DMA_CCR_DIR        // Memory to peripheral
+                        | DMA_CCR_CIRC       // Circular mode
+                        | DMA_CCR_MINC       // Memory increment mode
+                        | DMA_CCR_MSIZE_0    // 16-bit memory size
+                        | DMA_CCR_PSIZE_0    // 16-bit peripheral size
+                        | DMA_CCR_HTIE       // Half-transfer interrupt enable
+                        | DMA_CCR_TCIE;      // Transfer-complete interrupt enable
+
+    // Enable the DMA interrupt in the NVIC for Channel 2 and Channel 3
+    NVIC->ISER[0] = 1 << DMA1_Channel2_3_IRQn;
+}
+
+
+
+void enable_dma(void) {
+    // Enable DMA Channel 3 for DAC
+    DMA1_Channel3->CCR |= DMA_CCR_EN;
+}
+
+
+void DMA1_Ch2_3_DMA2_Ch1_2_IRQHandler(void) {
+    if (DMA1->ISR & DMA_ISR_HTIF3) {  // Half-transfer interrupt flag for Channel 3
+        DMA1->IFCR |= DMA_IFCR_CHTIF3;  // Clear the half-transfer flag
+        buffer_needs_refill = 1;        // Signal to refill the first half of the buffer
+       // printf("Half-transfer interrupt: Refilling first half of buffer.\n");
+    }
+    
+    if (DMA1->ISR & DMA_ISR_TCIF3) {  // Transfer-complete interrupt flag for Channel 3
+        DMA1->IFCR |= DMA_IFCR_CTCIF3;  // Clear the transfer-complete flag
+        buffer_needs_refill = 2;        // Signal to refill the second half of the buffer
+        //printf("Transfer-complete interrupt: Refilling second half of buffer.\n");
+    }
+}
+
+
+void init_audio_playback(void) {
+    // Initialize SPI and SD card I/O
+    init_sdcard_io();
+    sdcard_io_high_speed();
+
+    // Mount the file system using FatFs
+    if (f_mount(&fs, "", 1) != FR_OK) {
+        printf("Error: Unable to mount file system.\n");
+        return;
+    }
+    printf("SD card mounted successfully.\n");
+    
+}
+
+void refill_audio_buffer(void) {
+    if (buffer_needs_refill) {
+        UINT bytesToRead = AUDIO_BUFFER_SIZE / 2;  // Half buffer size in bytes
+        UINT bytesRead;
+
+        // Determine which half of the buffer to refill
+        int16_t* buffer_ptr = (buffer_needs_refill == 1) ? audio_buffer
+                                 : &audio_buffer[AUDIO_BUFFER_SIZE / 4];
+
+        // Read audio data from the file
+        if (f_read(&audio_file, buffer_ptr, bytesToRead, &bytesRead) != FR_OK || bytesRead == 0) {
+            printf("End of file or read error.\n");
+            TIM6->CR1 &= ~TIM_CR1_CEN;  // Stop playback if no more data
+            return;
+        }
+
+        // Number of samples read
+        uint32_t num_samples = bytesRead / 2;
+
+        // Process each sample
+        for (uint32_t i = 0; i < num_samples; i++) {
+            int16_t sample = buffer_ptr[i];  // Original signed 16-bit sample
+
+            // Apply volume scaling (increase volume)
+            int32_t adjusted_sample = ((int32_t)sample * volume_scale) / 100;
+
+            // Shift to positive range
+            adjusted_sample += 32768;  // Shift from [-32768, +32767] to [0, 65535]
+
+            // Clamp to prevent overflow
+            if (adjusted_sample < 0)
+                adjusted_sample = 0;
+            else if (adjusted_sample > 65535)
+                adjusted_sample = 65535;
+
+            // Map to DAC range 1024 to 3072
+            uint16_t dac_value = (adjusted_sample * 2048) / 65535 + 1024;
+
+            buffer_ptr[i] = dac_value;  // Store adjusted sample back into buffer
+        }
+
+        buffer_needs_refill = 0;  // Reset the refill flag
+    }
+}
+
+
+
+
+uint32_t read_wav_header(const char* filename, uint32_t* sample_rate) {
+    WAVHeader header;
+
+    if (f_open(&audio_file, filename, FA_READ) != FR_OK) {
+        printf("Error: Unable to open audio file.\n");
+        return 0;
+    }
+    printf("Audio file opened successfully: %s\n", filename);
+
+    UINT bytesRead;
+    if (f_read(&audio_file, &header, sizeof(WAVHeader), &bytesRead) != FR_OK || bytesRead != sizeof(WAVHeader)) {
+        printf("Error reading WAV header\n");
+        f_close(&audio_file);
+        return 0;
+    }
+    printf("WAV header read successfully.\n");
+
+    if (strncmp(header.riff_id, "RIFF", 4) != 0 || strncmp(header.wave_id, "WAVE", 4) != 0) {
+        printf("Invalid WAV file format.\n");
+        f_close(&audio_file);
+        return 0;
+    }
+
+    if (header.audio_format != 1 || header.num_channels != 1 || header.bits_per_sample != 16) {
+        printf("Unsupported WAV format: channels=%d, bits per sample=%d, format=%d\n",
+               header.num_channels, header.bits_per_sample, header.audio_format);
+        f_close(&audio_file);
+        return 0;
+    }
+
+    *sample_rate = header.sample_rate;  // Set the sample rate
+    return 1;
+}
+
+
+void play_audio(const char* filename) {
+    uint32_t sample_rate;
+
+    // Read the WAV header and get the sample rate
+    if (!read_wav_header(filename, &sample_rate)) {
+        return;  // Exit if there was an error
+    }
+
+    setup_dac();
+    setup_dma();
+    enable_dma();
+
+    // Pass the sample rate to init_tim6
+    init_tim6(sample_rate);
+
+    TIM6->CR1 |= TIM_CR1_CEN;  // Start Timer 6 for playback
+}
+
+
+//============================================================================
+// Keypad Scan
+//============================================================================
+
+char disp[9] = "Hello...";
+//extern uint8_t font[];
+volatile uint32_t interrupt_counter = 0;
+volatile uint32_t last_debounce_time = 0;
+char last_key = '\0'; // Initialize to null character
+int no_key_detected_count = 0; // Add this global variable
+#define NO_KEY_DETECTED_THRESHOLD 4 // Adjust this threshold as needed
+volatile uint32_t song_num = 0;
+
+
+
+uint8_t col = 0;
+char keymap[16] = {
+    'D', 'C', 'B', 'A',
+    '#', '9', '6', '3',
+    '0', '8', '5', '2',
+    '*', '7', '4', '1'
+};
+char* keymap_arr = keymap;
+
+
+volatile uint32_t sys_tick_counter = 0;
+
+void SysTick_Handler(void) {
+    sys_tick_counter++;
+}
+
+void init_systick(void) {
+    // Assuming a system clock of 48 MHz
+    SysTick_Config(48000); // 1 ms tick
+}
+
+uint32_t get_system_time_ms(void) {
+    return sys_tick_counter;
+}
+
+void drive_column(int c) {
+    c = c & 3;
+    GPIOC->BRR = 0xF << 4;              // Clear all columns
+    GPIOC->BSRR = (1 << (c + 4));       // Set the specific column high
+}
+
+int read_rows() {
+    return GPIOC->IDR & 0xF;            // Read the state of rows PC0-PC3
+}
+
+char rows_to_key(int rows) {
+    int offset = -1; // Initialize to an invalid index
+
+    if (rows & 0x1) {
+        offset = col * 4;
+    } else if (rows & 0x2) {
+        offset = col * 4 + 1;
+    } else if (rows & 0x4) {
+        offset = col * 4 + 2;
+    } else if (rows & 0x8) {
+        offset = col * 4 + 3;
+    }
+
+    if (offset != -1) {
+        return keymap_arr[offset];
+    } else {
+        return '\0'; // No key pressed
+    }
+}
+
+void handle_key(char key) {
+    printf("Key pressed: %c\n", key);
+    
+    if (key != song_num){
+        if (key == '1'){
+            play_audio("audio1.wav");
+        }
+        else if (key == '2'){
+            play_audio("audio2.wav");
+
+        }
+        else if (key == '3'){
+            play_audio("audio3.wav");
+        }
+    }
+
+    song_num = key;
+}
+
+void TIM7_IRQHandler(void) {
+    TIM7->SR &= ~TIM_SR_UIF;
+
+    // Drive the current column
+    drive_column(col);
+
+    // Read rows and handle key press
+    int rows = read_rows();
+    if (rows != 0) {
+        char key = rows_to_key(rows);
+        if (key != '\0') {
+            if (key != last_key) {
+                handle_key(key);
+                last_key = key; // Update the last key
+            }
+            no_key_detected_count = 0; // Reset the counter since a key is detected
+        }
+    } else {
+        // No key is pressed in this scan
+        no_key_detected_count++;
+        if (no_key_detected_count >= NO_KEY_DETECTED_THRESHOLD) {
+            // Only reset last_key after several consecutive no-key detections
+            last_key = '\0';
+            no_key_detected_count = 0; // Reset the counter
+        }
+    }
+
+    // Move to the next column
+    col = (col + 1) % 4; // Cycle through columns 0-3
+}
+
+
+
+void setup_tim7() {
+    RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
+    TIM7->PSC = 480 - 1;  
+    TIM7->ARR = 100 - 1;      
+    TIM7->DIER |= TIM_DIER_UIE;
+    NVIC_SetPriority(TIM7_IRQn, 1);
+    NVIC_EnableIRQ(TIM7_IRQn);
+    TIM7->CR1 |= TIM_CR1_CEN;
+}
+
+
+
+
+#include <string.h>
+#include <stdio.h>
+#include "commands.h"
+
+
+
+////
+
+
 
 
 int main() {
