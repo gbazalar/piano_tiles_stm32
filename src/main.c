@@ -19,19 +19,17 @@ const char* username = "griff323";
 #include <stdint.h>
 
 void internal_clock();
-// void drawfillrect(int x1, int y1, int x2, int y2, int c);
-// void nano_wait(unsigned int);
-// void lcd_init(int argc, char *argv[]);
+
 #include "lcd.h"
 #include "commands.h"
 #include "header.h"
-// #include "lcd.h"
 #include <stdio.h>
 // from step 4:
 #include "fifo.h"
 #include "tty.h"
-
-// TODO DMA data structures
+int i2c_checknack(void);
+void i2c_clearnack(void);
+// DMA data structures
 #define FIFOSIZE 16
 char serfifo[FIFOSIZE];
 int seroffset = 0;
@@ -66,55 +64,19 @@ int highscore = 0; // game's highscore ( will be updated to and with eeprom)
 
 
 void enable_ports() {
-  // commented out stuff is from lab3 for the keypad 
-  // RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-  // GPIOC->MODER |= GPIO_MODER_MODER4_0;
-  // GPIOC->MODER &= ~GPIO_MODER_MODER4_1;
-  // GPIOC->MODER |= GPIO_MODER_MODER5_0;
-  // GPIOC->MODER &= ~GPIO_MODER_MODER5_1;
-  // GPIOC->MODER |= GPIO_MODER_MODER6_0;
-  // GPIOC->MODER &= ~GPIO_MODER_MODER6_1;
-  // GPIOC->MODER |= GPIO_MODER_MODER7_0;
-  // GPIOC->MODER &= ~GPIO_MODER_MODER7_1;
-  // GPIOC->MODER &= ~(GPIO_MODER_MODER0_0 | GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_0 | GPIO_MODER_MODER1_1 | GPIO_MODER_MODER2_0 |GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_0 | GPIO_MODER_MODER3_1);
-  // GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR0_0;
-  // GPIOC->PUPDR |= GPIO_PUPDR_PUPDR0_1;
-  // GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR1_0;
-  // GPIOC->PUPDR |= GPIO_PUPDR_PUPDR1_1;
-  // GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR2_0;
-  // GPIOC->PUPDR |= GPIO_PUPDR_PUPDR2_1;
-  // GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR3_0;
-  // GPIOC->PUPDR |= GPIO_PUPDR_PUPDR3_1;
-
-  // i2c for eeprom
-    // pa9 i2c1_scl, pa10 i2c1_sck
-  RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-  // GPIOA->MODER &= ~(GPIO_MODER_MODER9_0 | GPIO_MODER_MODER10_0);
-  // GPIOA->MODER |= GPIO_MODER_MODER9_1 | GPIO_MODER_MODER10_1; // alt func 10
-  // GPIOA->AFR[1] |= 0x00000110; // AF4 0100 for 9, 10
-
   // lab 6 for spi - show current score
   RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
   GPIOB->MODER &= ~(0xCF000000);
   GPIOB->MODER |= 0x45000000;
   GPIOB->BSRR = GPIO_BSRR_BS_12;
   GPIOB->BSRR = GPIO_BSRR_BR_13;
-  
-  // stuff to enable ports for button input 
-  // enable GPIOA for button input 
-  // PA0 left, PA1 right 
-  GPIOA->MODER &= ~(GPIO_MODER_MODER0_0 | GPIO_MODER_MODER2_0 | GPIO_MODER_MODER2_1 | GPIO_MODER_MODER0_1); 
-  GPIOA->PUPDR |= GPIO_PUPDR_PUPDR0_1 | GPIO_PUPDR_PUPDR2_1;
-  GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_0 | GPIO_PUPDR_PUPDR2_0);
 
   // eeprom
   RCC->AHBENR |= RCC_AHBENR_GPIOBEN; //enable port B
   GPIOB->MODER &= ~(0x0000F000); //clear PB6-7
   GPIOB->MODER |= 0x0000A000; //set to alt function mode for PB6-7
-
   GPIOB->AFR[0] |= 0x1 << (6 * 4); //set to AF1
   GPIOB->AFR[0] |= 0x1 << (7 * 4); //set to AF1
-  // GPIOB->OTYPER |= 0x00001000;
 }
 
 // lab 6 stuff:
@@ -133,33 +95,14 @@ void init_tim15(void) {
     TIM15->CR1 |= TIM_CR1_CEN;
 }
 
-// void init_spi1_slow(void) { 
-//     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-//     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
-//     // PB3 SCK, PB4 MISO, PB5 MOSI 
-//     GPIOB->MODER |= 0x00000A80; // alt fctn 10
-//     GPIOB->AFR[0] &= ~(0x00FFF000); // AF0 - 0000
-//     SPI1->CR1 &= ~SPI_CR1_SPE;
-//     // baud rate max, master, ssm, ssi
-//     SPI1->CR1 |=  SPI_CR1_BR | SPI_CR1_MSTR | SPI_CR1_SSM | SPI_CR1_SSI;
-//     // data size 8. fifo reception 
-//     SPI1->CR2 |= SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0; 
-//     SPI1->CR2 &= ~(SPI_CR2_DS_3);
-//     SPI1->CR2 |= SPI_CR2_FRXTH;
-//     SPI1->CR1 |= SPI_CR1_SPE;
-// }
 // initialize spi2
 void init_spi2(void) { 
     RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-    // now set GPIOB pins to alt funct ???? Huh???
     // PB12 (CS-NSS), PB13 (SCK), PB15 (SDI-MOSI) - 10 
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB->MODER |= GPIO_MODER_MODER12_1 | GPIO_MODER_MODER13_1 | GPIO_MODER_MODER15_1;
     GPIOB->MODER &= ~(GPIO_MODER_MODER12_0 | GPIO_MODER_MODER13_0 | GPIO_MODER_MODER15_0);
     GPIOB->AFR[1] &= ~(GPIO_AFRL_AFSEL4 | GPIO_AFRL_AFSEL5 | GPIO_AFRL_AFSEL7);
-    // GPIOB->MODER &= ~(0xFF000000);
-    // GPIOB->MODER |= 0x8A000000;
-    // GPIOB->AFR[1] &= ~(0xF0FF0000);
     SPI2->CR1 &= ~SPI_CR1_SPE;
     SPI2->CR1 |= SPI_CR1_BR_2 | SPI_CR1_BR_1 | SPI_CR1_BR_0;
     SPI2->CR2 |= SPI_CR2_DS_3 | SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0;
@@ -188,86 +131,6 @@ void spi2_enable_dma(void) {
     DMA1_Channel5->CCR |= DMA_CCR_EN;
 }
 
-
-
-// from i2c lab 
-// configure i2c1
-// void init_i2c(void) {
-//     RCC-> RCC_APB1ENR_I2C1EN;
-// }
-//from lab 1 for reading button value
-int32_t readpin(int32_t pin_num);
-int32_t readpin(int32_t pin_num) {
-  // input: pin number
-  // output: 1 (pressed) or 0
-  int val = 1<<pin_num;
-  if (GPIOA->IDR & val) { return 0x1; } // pin is high
-  else { return 0x0; } // pin is low
-}
-
-
-
-
-// keypad functions from lab
-void show_char(int n, char c) {
-  // if ((n >= 0) && (n <= 7)) {
-  //   GPIOB->ODR = font[c] | (n<<8);
-  // }
-  // else return;
-}
-void drive_column(int c) {
-    GPIOC->BSRR |=  0xF<<(4 + 16); //bitshift 4 1s
-  //c = 0b11 && c; //get least significant bit values
-    GPIOC->BSRR |= 1<<((0x3 & c) + 4);
-}
-int read_rows() {//TA PLEASE CHECK IF THIS IS THE RIGHT IDEA
-  int8_t row = 0; //TA how to initialize 4 bit int? is 8 fie cause it just reads the last 4 bits?
-  for (int curr_row = 3; curr_row >= 0; curr_row--){
-    int8_t temp = 1<<curr_row;
-    if ((GPIOC->IDR) & temp) {
-      row |= 1<<curr_row;
-    }
-    
-  }
-  return (row);
-
-}
-char rows_to_key(int rows) {
-  // char c = 0;
-    // for (int col = 7; col >= 4; col--) {
-    //   int8_t temp = 1<<col;
-    //   if (GPIOC->IDR & temp) {
-    //     c = keymap_arr[(col)*4 + rows];
-    //   }
-    // }
-    int row = 0;
-    char c;
-    if(rows & 0x1) row = 0;
-    else if(rows & 0x2) row = 0x1;
-    else if(rows & 0x4) row = 0x2;
-    else if(rows & 0x8) row = 0x3;
-
-    // if(rows & 0x4) row = 0x3;
-    // else if (rows & 0x3) row = 0x2;
-    // else if (rows & 0x2) row = 0x1;
-    // else if (rows & 0x1) row = 0x0;
-    
-    if (row >= 0) {
-      c = keymap_arr[(col)*4 + row];
-    }
-    return (c);
-}
-int __io_putchar(int c) {
-    // TODO copy from STEP2
-    if(c == '\n') {
-        while(!(USART5->ISR & USART_ISR_TXE));
-        USART5->TDR = '\r';
-    }
-    while(!(USART5->ISR & USART_ISR_TXE));
-    USART5->TDR = c;
-    return c;
-}
-
 // TFT EXTRA
 void init_spi1_slow(void) { 
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
@@ -277,17 +140,6 @@ void init_spi1_slow(void) {
     GPIOB->MODER |= GPIO_MODER_MODER3_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1;
     GPIOB->MODER &= ~(GPIO_MODER_MODER3_0 | GPIO_MODER_MODER4_0 | GPIO_MODER_MODER5_0);
     GPIOB->AFR[0] &= ~(GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL4 | GPIO_AFRL_AFSEL5);
-    
-
-    // GPIOB->MODER &= ~(0xFF0);
-    // GPIOB->MODER |= 0x00000A80; // alt fctn 10
-    // GPIOB->AFR[0] &= ~(0x00FFF000); // AF0 - 0000
-
-    //From SPI2:
-    //GPIOB->MODER &= ~(0xFF000000);
-    //GPIOB->MODER |= 0x8A000000;
-    //GPIOB->AFR[1] &= ~(0xF0FF0000);
-    //From Spi2
     
     SPI1->CR1 &= ~SPI_CR1_SPE;
     // baud rate max, master, ssm, ssi
@@ -323,30 +175,6 @@ void init_lcd_spi() { //2.7
     init_spi1_slow();// cll init_spi_slow to configure SPI1
     sdcard_io_high_speed();// sdcard-io_high_speed() to make SPI1 fast
 }
-
-// initialize adc to use floating pin for srand seed - actually don't
-//  based on lab 4
-// void setup_adc(void);
-// int read_adc(void);
-// void setup_adc(void) {
-//     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-//     // pin associated with adc_in1 to analog
-//     GPIOA->MODER |= 0x0000000C;
-//     RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
-//     // enable adc by setting aden bit in CRC
-//     ADC1->CR |= ADC_CR_ADEN;
-//     // wait for adc 
-//     while(!(ADC1->ISR & ADC_ISR_ADRDY));
-//     // select channel for adc_in1 in chselr
-//     ADC1->CHSELR |= (1<<1);
-//     // wait for adc 
-//     while(!(ADC1->ISR & ADC_ISR_ADRDY));
-// }
-// int read_adc(void) {
-//     ADC1->CR |= ADC_CR_ADSTART; // enable to start conversion
-//     while (!(ADC1->ISR & ADC_ISR_EOC)); // wait until conversion done
-//     return ADC1->DR; // return int val read
-// }
 
 void print(const char str[])
 {
@@ -399,30 +227,9 @@ void init_tim2(void) {
 
 // eeprom i2c stuff
 void init_i2c(void) {
-    // RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
-    // I2C1->CR1 &= ~I2C_CR1_PE; //disable I2C first
-    // // I2C1->CR1 |= I2C_CR1_ERRIE; //error interrupt enabled
-    // // I2C1->CR1 |= I2C_CR1_ANFOFF; //disable analog filter
-
-    // //CHANGE ABOVE
-
-    // I2C1->CR1 |= I2C_CR1_NOSTRETCH; //disable clock stretching
-    // I2C1->TIMINGR = 0;
-    // I2C1->TIMINGR &= ~I2C_TIMINGR_PRESC;
-    // I2C1->TIMINGR |= (5 << 28 | 3 << 20 | 3 << 16 | 3 << 8 | 9 << 0); //6 * 8Mhz = 48Mhz clock, 400 kHZ fast mode (supported by EEPROM)
-    // //CHANGE ABOVE
-    // I2C1->CR2 &= ~I2C_CR2_ADD10; //7-bit addressing
-    // I2C1->CR2 &= ~I2C_CR2_AUTOEND; //send stop after last NBytes is transferred
-    // I2C1->CR1 |= I2C_CR1_PE; //enable I2C
-
-
-
-
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN; //enable peripheral clock
     I2C1->CR1 &= ~I2C_CR1_PE; //peripheral disabled
 
-    // I2C1->CR1 &= ~I2C_CR1_ANFOFF; //turn off analog noise filter
-    // I2C1->CR1 &= ~I2C_CR1_ERRIE; //turn on error detection interrupts
     I2C1->CR1 |= I2C_CR1_NOSTRETCH; //disable clock stretching
 
     I2C1->TIMINGR &= ~(0xF << 28); //clear all registers
@@ -431,10 +238,8 @@ void init_i2c(void) {
     I2C1->TIMINGR |= 0x3 << 16; //set sdadel
     I2C1->TIMINGR |= 0x3 << 8; //set sclh
     I2C1->TIMINGR |= 0x9; //set scll
-    // I2C1->TIMINGR = (uint32_t)0x00B01A4B;
     
     I2C1->CR2 &= ~I2C_CR2_ADD10; //7-bit addressing mode
-    //I2C1->CR2 |= I2C_CR2_AUTOEND; //automatically send a STOP condition after last byte of transmission ???
     I2C1->CR1 |= I2C_CR1_PE; //peripheral enabled
 }
 
@@ -442,22 +247,6 @@ void init_i2c(void) {
 // Send a START bit.
 //===========================================================================
 void i2c_start(uint32_t targadr, uint8_t size, uint8_t dir) {
-    // uint32_t tempCR2 = I2C1->CR2;
-    // tempCR2 &= ~(I2C_CR2_SADD | I2C_CR2_NBYTES | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP); //clearing NBytes, STOP, START, RD_WRN, SADD
-    // if (dir){
-    //     tempCR2 |= I2C_CR2_RD_WRN; //operation is a read
-    // }
-    // else {
-    //     tempCR2 &= ~I2C_CR2_RD_WRN;
-    // }
-    // tempCR2 |= ((targadr<<1) & I2C_CR2_SADD) | ((size << 16) & I2C_CR2_NBYTES); //set target address and data size
-    // tempCR2 |= I2C_CR2_START; //prepare start of read/write
-    // I2C1->CR2 = tempCR2;
-
-
-
-
-
     // 0. Take current contents of CR2 register. 
     uint32_t tmpreg = I2C1->CR2;
 
@@ -486,17 +275,6 @@ void i2c_start(uint32_t targadr, uint8_t size, uint8_t dir) {
 // Send a STOP bit.
 //===========================================================================
 void i2c_stop(void) {
-    //  //Check if stop bit is set
-    // if (I2C1->ISR & I2C_ISR_STOPF) {
-    //     return;
-    // }
-    // I2C1->CR2 |= I2C_CR2_STOP;
-    // while (!(I2C1->ISR & I2C_ISR_STOPF)); //wait for STOP 
-    // I2C1->ICR |= I2C_ICR_STOPCF; //clear stop flag
-
-
-
-
     // 0. If a STOP bit has already been sent, return from the function.
     if (I2C1->ISR & I2C_ISR_STOPF) {
         return;
@@ -523,53 +301,6 @@ void i2c_waitidle(void) {
 // Send each char in data[size] to the I2C bus at targadr.
 //===========================================================================
 int8_t i2c_senddata(uint8_t targadr, uint8_t data[], uint8_t size, uint8_t randRead) {
-    // i2c_waitidle(); //wait for I2C to be idle
-    // i2c_start(targadr, size, 0); //send START with write bit (dir = 0)
-    // for (int i = 0; i < size; i++)
-    // {
-    //     int count = 0;
-    //     while (!(I2C1->ISR & I2C_ISR_TXIS)) {
-    //         count += 1;
-    //         if (count > 1000000)
-    //             return -1;
-    //         if (i2c_checknack()) {
-    //             i2c_clearnack();
-    //             i2c_stop();
-    //             return -1;
-    //         }   
-    //     }
-    // I2C1->TXDR = data[i] & I2C_TXDR_TXDATA; //mask data[i] with TXDR_TXDATA
-    // }
-    // while ((!(I2C1->ISR & I2C_ISR_TC) && !(I2C1->ISR & I2C_ISR_NACKF))); //wait for these to be not set
-
-    // //CHANGE ABOVE
-
-    // // i2c_waitidle();
-
-
-    // if (I2C1->ISR & I2C_ISR_NACKF){
-    //     i2c_clearnack();
-    //     i2c_stop();
-    //     return -1;
-    //     //CHANGE ABOVE
-
-
-    //     // return -1; //write failed
-    // }
-
-    // // if (randRead == 0) {
-    // //     i2c_stop(); //send STOP
-    // // }
-    // //CHANGE ABOVE
-
-    // i2c_stop();
-    // return 0; //0 for success
-
-
-
-
-
-    //i2c_waitidle();
     i2c_start(targadr, size, 0); //request a write transfer
 
     for(int i = 0; i < size; i++) {
@@ -590,7 +321,6 @@ int8_t i2c_senddata(uint8_t targadr, uint8_t data[], uint8_t size, uint8_t randR
     }
 
      while ((I2C1->ISR & (I2C_ISR_TC | I2C_ISR_NACKF)) == 0);
-    //i2c_waitidle();
 
     if (I2C1->ISR & I2C_ISR_NACKF) {
         i2c_clearnack();
@@ -606,50 +336,6 @@ int8_t i2c_senddata(uint8_t targadr, uint8_t data[], uint8_t size, uint8_t randR
 // Receive size chars from the I2C bus at targadr and store in data[size].
 //===========================================================================
 int i2c_recvdata(uint8_t targadr, void *data, uint8_t size) {
-    // if (size <= 0 || data == 0){
-    //     return -1;
-    // }
-    
-    // i2c_waitidle(); //wait for I2C to be idle
-    // i2c_start(targadr, size, 1); //send START with read bit (dir = 1)
-
-    // uint8_t i;
-    // for (i = 0; i < size; i++) {
-    //     int count = 0;
-    //     while ((I2C1->ISR & I2C_ISR_RXNE) == 0) {
-    //         count += 1;
-    //         if (count > 1000000)
-    //             return -1;
-    //         if (i2c_checknack()) {
-    //             i2c_clearnack();
-    //             i2c_stop();
-    //             return -1;
-    //         }
-    //     }  
-    //     ((uint8_t*)data)[i] = (I2C1->RXDR & I2C_RXDR_RXDATA);
-    //     // ((uint8_t*)data)[i] = (I2C1->RXDR & I2C_RXDR_RXDATA); //store masked data
-    // }
-
-    // // while ((I2C1->ISR & I2C_ISR_TC) == 0 && (I2C1->ISR & I2C_ISR_NACKF) == 0);
-
-    // // if((I2C1->ISR & I2C_ISR_NACKF) != 0){
-    // //     return -1;
-    // // }
-
-    // // i2c_stop();
-
-    // i2c_waitidle();
-    // i2c_stop();
-    // return 0;
-    // //CHANGE ABOVE
-
-    // // return 0;
-
-
-
-
-
-    //i2c_waitidle();
     i2c_start(targadr, size, 1); //send a read request
 
     for(int i = 0; i < size; i++) {
@@ -717,17 +403,11 @@ void eeprom_read(uint16_t loc, char data[], uint8_t len) {
 
 int main() {
     internal_clock();
-    // init_usart5();
-    // enable_tty_interrupt();
     setbuf(stdin,0);
     setbuf(stdout,0);
     setbuf(stderr,0);
     enable_ports();
-    // init_exti();
-    // command_shell();
-    // init_spi1_slow();
     init_spi2();
-    // drawfillrectME(0,0,200,200,0x0000);
     spi2_setup_dma();
     spi2_enable_dma();
     init_tim15();
@@ -739,7 +419,6 @@ int main() {
     drawlineME(120,0,120,320, 0xadd8e6);
     drawlineME(180,0,180,320, 0xadd8e6);
     drawfillrectME(121,0,179,39,0x0000); 
-    // setup_adc();
     srand(5);
 
     // joystick:
@@ -751,34 +430,14 @@ int main() {
     
     char string[32];
 
-    // test i2c:
-    // char writeArr[32];
-    // snprintf(writeArr, sizeof(writeArr), "%4d%4d", 4, 3);
-    // eeprom_write(0, writeArr, 32);
-    // nano_wait(1000000);
-    // char readArr[32];
-    // eeprom_read(0, readArr, 32);
-    // print(readArr);
-    
-    // snprintf(string, sizeof(string), "%4d%4d", highscore, 5);
-    // print(string);
-
     // read last high score from eeprom
     char lasthigh[32];
     eeprom_read(0, lasthigh, 32);
-    print(lasthigh);
-    // use sscanf to convert char * lasthigh to int highscore? 
+    // use sscanf to convert char * lasthigh to int highscore
     sscanf(lasthigh, "%d", &highscore);
+    snprintf(string, sizeof(string), "%4d%4d", highscore, 0);
+    print(string);
 
-    // snprintf(string, sizeof(string), "%4d", highscore);
-  
-    // init_spi2();
-    // // drawfillrectME(0,0,200,200,0x0000);
-    // spi2_setup_dma();
-    // spi2_enable_dma();
-    // init_tim15();
-    // lcd_initME();
-    // init_lcd_spi();
     int game = 1;
 
     int time = 500000;
@@ -786,7 +445,6 @@ int main() {
 
     while (game) {
       time = time / 100;
-       //DEVELOPING SCORING: ONLY 1 BOX 
       tileNum = (rand() % 2) + 1;
       if (tileNum == 2) {
         box_num = (rand() % 4)+1;
@@ -807,7 +465,7 @@ int main() {
         // loop to shift tiles down
         for (int l = 320; l >= 0; l--) { 
           if (joyVal < 2900) goLeft = 1;
-          if (joyVal > 3200) goRight = 1;
+          if (joyVal > 3700) goRight = 1;
           // cursor check
           prevCol = currCol;
           if (!(l%10) && goLeft) { // if left
@@ -883,11 +541,7 @@ int main() {
             }
             currScore++;
             lane2 = 0;
-            // if (currCol == 4) drawfillrectME(0, 0,59, 39, 0x0000);
             drawfillrectME(60*(4-currCol) + 1, 0, 60*(4-currCol) - 1 + 60, 39, 0x0000);
-            // if (box_num == 3) box1On = 0;
-            // if (boxTwo == 4) box2On = 0;
-            // break;
           }
           else if (lane3 == currCol) {
             if (box_num == 2) {
@@ -900,11 +554,7 @@ int main() {
             }
             currScore++;
             lane3 = 0;
-            // if (currCol == 4) drawfillrectME(0, 0,59, 39, 0x0000);
             drawfillrectME(60*(4-currCol) + 1, 0, 60*(4-currCol) - 1 + 60, 39, 0x0000);
-            // if (box_num == 2) box1On = 0;
-            // if (boxTwo == 4) box2On = 0;
-            // break;
           }
           else if (lane4 == currCol) {
             if (box_num == 1) {
@@ -918,9 +568,6 @@ int main() {
             currScore++;
             lane4 = 0;
             drawfillrectME(0, 0,59, 39, 0x0000);
-            // if (box_num == 1) box1On = 0;
-            // if (boxTwo == 4) box2On = 0;
-            // break;
           }
           if (!box1On && !box2On) {
             break;
@@ -941,11 +588,9 @@ int main() {
         int goLeft=0;
         int goRight=0;
         for (int l = 320; l >= 0; l--) { 
-          // reset score check variables
-
           // cursor move check
           if (joyVal < 2900) goLeft = 1;
-          if (joyVal > 3200) goRight = 1;
+          if (joyVal > 3700) goRight = 1;
 
           prevCol = currCol;
           if (!(l%10) && goLeft) { // if left
@@ -999,7 +644,6 @@ int main() {
             drawfillrectME(left-58,40,left,320,0xffff);
             currScore++;
             lane2 = 0;
-            // if (currCol == 4) drawfillrectME(0, 0,59, 39, 0x0000);
             drawfillrectME(60*(4-currCol) + 1, 0, 60*(4-currCol) - 1 + 60, 39, 0x0000);
             break;
           }
@@ -1007,7 +651,6 @@ int main() {
             drawfillrectME(left-58,40,left,320,0xffff);
             currScore++;
             lane3 = 0;
-            // if (currCol == 4) drawfillrectME(0, 0,59, 39, 0x0000);
             drawfillrectME(60*(4-currCol) + 1, 0, 60*(4-currCol) - 1 + 60, 39, 0x0000);
             break;
           }
@@ -1029,6 +672,7 @@ int main() {
   
   
   // write highscore to eeprom 
+  // highscore=0; // for resetting high score to 0
   char writeScore[32];
   snprintf(writeScore, sizeof(writeScore), "%4d", highscore);
   eeprom_write(0, writeScore, 32);
@@ -1047,9 +691,6 @@ int main() {
   drawlineME(x, y - 24, x + 16, y - 24, color);      // Bottom horizontal
   drawlineME(x , y - 12, x + 8, y - 12, color);  // Middle horizontal
   drawlineME(x , y - 12, x , y - 24, color); // Right vertical (bottom half)
-
-  // x += 20;  // Move to next letter position
-
   // // Draw "A"
   drawlineME(x - 10, y, x -2, y - 24, color);            // Left diagonal (inverted)
   drawlineME(x - 10, y, x - 18, y - 24, color);       // Right diagonal (inverted)
@@ -1086,97 +727,3 @@ int main() {
   drawlineME(x - 42, y - 12, x - 54, y - 24, color);      // Diagonal leg
   drawlineME(x - 42, y - 11, x - 54, y - 23, color);      // Diagonal leg
 }
-
-
-// unused functions garbage pile: 
-
-// void enable_tty_interrupt(void) {
-//     // TODO
-//     USART5->CR1 |= USART_CR1_RXNEIE;
-//     // set proper bit in NVIC ISER - ??? 
-//     NVIC_EnableIRQ(USART3_8_IRQn);
-//     USART5->CR3 |= USART_CR3_DMAR; 
-//     RCC->AHBENR |= RCC_AHBENR_DMA2EN;
-//     DMA2->CSELR |= DMA2_CSELR_CH2_USART5_RX;
-//     DMA2_Channel2->CCR &= ~DMA_CCawfillrect 0 R_EN;  // First make sure DMA is turned off
-//     // The DMA channel 2 configuration goes here
-//     DMA2_Channel2->CMAR = (uint32_t)&serfifo;
-//     DMA2_Channel2->CPAR = (uint32_t)&(USART5->RDR);
-//     DMA2_Channel2->CNDTR |= FIFOSIZE;
-//     DMA2_Channel2->CCR &= ~(DMA_CCR_DIR | DMA_CCR_HTIE); // CHANGED FROM STEP 4 
-//     DMA2_Channel2->CCR &= ~(DMA_CCR_MSIZE|DMA_CCR_PSIZE);
-//     DMA2_Channel2->CCR |= DMA_CCR_MINC;
-//     DMA2_Channel2->CCR &= ~DMA_CCR_PINC;
-//     DMA2_Channel2->CCR |= DMA_CCR_CIRC;
-//     DMA2_Channel2->CCR &= ~DMA_CCR_MEM2MEM;
-//     DMA2_Channel2->CCR |= DMA_CCR_PL_1 | DMA_CCR_PL_0;
-//     DMA2_Channel2->CCR |= DMA_CCR_TCIE; // CHANGED FROM STEP4
-//     DMA2_Channel2->CCR |= DMA_CCR_EN;
-// }
-
-// // Works like line_buffer_getchar(), but does not check or clear ORE nor wait on new characters in USART
-// char interrupt_getchar() {
-//     // TODO
-//     // Wait for a newline to complete the buffer.
-//     while(fifo_newline(&input_fifo) == 0) {
-//         asm volatile ("wfi"); // wait for an interrupt
-//     }
-//     // Return a character from the line buffer.
-//     char ch = fifo_remove(&input_fifo);
-//     return ch;
-// }
-
-// int __io_getchar(void) {
-//     // TODO Use interrupt_getchar() instead of line_buffer_getchar()
-//     char c = interrupt_getchar();
-//     return c;
-// }
-// char get_keypress(void);
-// char get_keypress() {
-//     char event;
-//     for(;;) {
-//         // Wait for every button event...
-//         event = get_key_event();
-//         // ...but ignore if it's a release.
-//         if (event & 0x80)
-//             break;
-//     }
-//     return event & 0x7f;
-// }
-// char pop_queue(void);
-// char pop_queue() {
-//     char tmp = queue[qout];
-//     queue[qout] = 0;
-//     qout ^= 1;
-//     return tmp;
-// }
-// char get_key_event(void);
-// char get_key_event(void) {
-//     for(;;) {
-//         asm volatile ("wfi");   // wait for an interrupt
-//         if (queue[qout] != 0)
-//             break;
-//     }
-//     return pop_queue();
-// }
-// char get_keypress() {
-//     char event;
-//     for(;;) {
-//         // Wait for every button event...
-//         event = get_key_event();
-//         // ...but ignore if it's a release.
-//         if (event & 0x80)
-//             break;
-//     }
-//     return event & 0x7f;
-// }
-// void enable_ports(void) {
-//     // Only enable port C for the keypad
-//     RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-//     GPIOC->MODER &= ~0xffff;
-//     GPIOC->MODER |= 0x55 << (4*2);
-//     GPIOC->OTYPER &= ~0xff;
-//     GPIOC->OTYPER |= 0xf0;
-//     GPIOC->PUPDR &= ~0xff;
-//     GPIOC->PUPDR |= 0x55;
-// }
