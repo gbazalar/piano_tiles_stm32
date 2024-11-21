@@ -629,6 +629,9 @@ void parse_command(char *c)
     }
 }
 
+void LCD_DrawStringME(uint16_t x,uint16_t y, uint16_t fc, uint16_t bg, const char *p, uint8_t size, uint8_t mode) {
+    LCD_DrawString(x,y,fc,bg,*p,size,mode);
+}
 
 static void insert_echo_string(const char *s)
 {

@@ -54,18 +54,18 @@ void set_digit_segments(int digit, char val) {
     msg[digit] = (digit << 8) | val;
 }
 
-void print(const char str[])
-{
-    const char *p = str;
-    for(int i=0; i<8; i++) {
-        if (*p == '\0') {
-            msg[i] = (i<<8);
-        } else {
-            msg[i] = (i<<8) | font[*p & 0x7f] | (*p & 0x80);
-            p++;
-        }
-    }
-}
+// void print(const char str[])
+// {
+//     const char *p = str;
+//     for(int i=0; i<8; i++) {
+//         if (*p == '\0') {
+//             msg[i] = (i<<8);
+//         } else {
+//             msg[i] = (i<<8) | font[*p & 0x7f] | (*p & 0x80);
+//             p++;
+//         }
+//     }
+// }
 
 void printfloat(float f)
 {
