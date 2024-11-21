@@ -24,14 +24,10 @@ void internal_clock();
 #include "commands.h"
 #include "header.h"
 #include <stdio.h>
-// from step 4:
-#include "fifo.h"
 #include "tty.h"
 int i2c_checknack(void);
 void i2c_clearnack(void);
 // DMA data structures
-#define FIFOSIZE 16
-char serfifo[FIFOSIZE];
 int seroffset = 0;
 void enable_ports();
 void show_char(int n, char c);
