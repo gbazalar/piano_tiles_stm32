@@ -1,4 +1,5 @@
 #include "stm32f0xx.h"
+#include "header.h"
 void internal_clock()
 {
     /* Disable HSE to allow use of the GPIOs */

@@ -3,11 +3,11 @@
 #include <stdlib.h> // for srandom() and random()
 #include <stdio.h>
 
-void nano_wait(unsigned int n) {
-    asm(    "        mov r0,%0\n"
-            "repeat: sub r0,#83\n"
-            "        bgt repeat\n" : : "r"(n) : "r0", "cc");
-}
+// void nano_wait(unsigned int n) {
+//     asm(    "        mov r0,%0\n"
+//             "repeat: sub r0,#83\n"
+//             "        bgt repeat\n" : : "r"(n) : "r0", "cc");
+// }
 
 const char font[] = {
     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
@@ -54,18 +54,18 @@ void set_digit_segments(int digit, char val) {
     msg[digit] = (digit << 8) | val;
 }
 
-void print(const char str[])
-{
-    const char *p = str;
-    for(int i=0; i<8; i++) {
-        if (*p == '\0') {
-            msg[i] = (i<<8);
-        } else {
-            msg[i] = (i<<8) | font[*p & 0x7f] | (*p & 0x80);
-            p++;
-        }
-    }
-}
+// void print(const char str[])
+// {
+//     const char *p = str;
+//     for(int i=0; i<8; i++) {
+//         if (*p == '\0') {
+//             msg[i] = (i<<8);
+//         } else {
+//             msg[i] = (i<<8) | font[*p & 0x7f] | (*p & 0x80);
+//             p++;
+//         }
+//     }
+// }
 
 void printfloat(float f)
 {
@@ -126,15 +126,15 @@ void update_history(int c, int rows)
     }
 }
 
-void drive_column(int c)
-{
-    GPIOC->BSRR = 0xf00000 | ~(1 << (c + 4));
-}
+// void drive_column(int c)
+// {
+//     GPIOC->BSRR = 0xf00000 | ~(1 << (c + 4));
+// }
 
-int read_rows()
-{
-    return (~GPIOC->IDR) & 0xf;
-}
+// int read_rows()
+// {
+//     return (~GPIOC->IDR) & 0xf;
+// }
 
 char get_key_event(void) {
     for(;;) {
@@ -174,99 +174,99 @@ void dot()
     msg[7] |= 0x80;
 }
 
-extern uint16_t display[34];
-void spi1_dma_display1(const char *str)
-{
-    for(int i=0; i<16; i++) {
-        if (str[i])
-            display[i+1] = 0x200 + str[i];
-        else {
-            // End of string.  Pad with spaces.
-            for(int j=i; j<16; j++)
-                display[j+1] = 0x200 + ' ';
-            break;
-        }
-    }
-}
+// extern uint16_t display[34];
+// void spi1_dma_display1(const char *str)
+// {
+//     for(int i=0; i<16; i++) {
+//         if (str[i])
+//             display[i+1] = 0x200 + str[i];
+//         else {
+//             // End of string.  Pad with spaces.
+//             for(int j=i; j<16; j++)
+//                 display[j+1] = 0x200 + ' ';
+//             break;
+//         }
+//     }
+// }
 
-void spi1_dma_display2(const char *str)
-{
-    for(int i=0; i<16; i++) {
-        if (str[i])
-            display[i+18] = 0x200 + str[i];
-        else {
-            // End of string.  Pad with spaces.
-            for(int j=i; j<16; j++)
-                display[j+18] = 0x200 + ' ';
-            break;
-        }
-    }
-}
+// void spi1_dma_display2(const char *str)
+// {
+//     for(int i=0; i<16; i++) {
+//         if (str[i])
+//             display[i+18] = 0x200 + str[i];
+//         else {
+//             // End of string.  Pad with spaces.
+//             for(int j=i; j<16; j++)
+//                 display[j+18] = 0x200 + ' ';
+//             break;
+//         }
+//     }
+// }
 
 int score = 0;
 char disp1[17] = "                ";
 char disp2[17] = "                ";
 volatile int pos = 0;
-void TIM17_IRQHandler(void)
-{
-    TIM17->SR &= ~TIM_SR_UIF;
-    memmove(disp1, &disp1[1], 16);
-    memmove(disp2, &disp2[1], 16);
-    if (pos == 0) {
-        if (disp1[0] != ' ')
-            score -= 1;
-        if (disp2[0] != ' ')
-            score += 1;
-        disp1[0] = '>';
-    } else {
-        if (disp2[0] != ' ')
-            score -= 1;
-        if (disp1[0] != ' ')
-            score += 1;
-        disp2[0] = '>';
-    }
-    int create = random() & 3;
-    if (create == 0) { // one in four chance
-        int line = random() & 1;
-        if (line == 0) { // pick a line
-            disp1[15] = 'x';
-            disp2[15] = ' ';
-        } else {
-            disp1[15] = ' ';
-            disp2[15] = 'x';
-        }
-    } else {
-        disp1[15] = ' ';
-        disp2[15] = ' ';
-    }
-    if (pos == 0)
-        disp1[0] = '>';
-    else
-        disp2[0] = '>';
-    if (score >= 100) {
-        print("Score100");
-        spi1_dma_display1("Game over");
-        spi1_dma_display2("You win");
-        NVIC->ICER[0] = 1<<TIM17_IRQn;
-        return;
-    }
-    char buf[9];
-    snprintf(buf, 9, "Score% 3d", score);
-    print(buf);
-    spi1_dma_display1(disp1);
-    spi1_dma_display2(disp2);
-    TIM17->ARR = 250 - 1 - 2*score;
-}
+// void TIM17_IRQHandler(void)
+// {
+//     TIM17->SR &= ~TIM_SR_UIF;
+//     memmove(disp1, &disp1[1], 16);
+//     memmove(disp2, &disp2[1], 16);
+//     if (pos == 0) {
+//         if (disp1[0] != ' ')
+//             score -= 1;
+//         if (disp2[0] != ' ')
+//             score += 1;
+//         disp1[0] = '>';
+//     } else {
+//         if (disp2[0] != ' ')
+//             score -= 1;
+//         if (disp1[0] != ' ')
+//             score += 1;
+//         disp2[0] = '>';
+//     }
+//     int create = random() & 3;
+//     if (create == 0) { // one in four chance
+//         int line = random() & 1;
+//         if (line == 0) { // pick a line
+//             disp1[15] = 'x';
+//             disp2[15] = ' ';
+//         } else {
+//             disp1[15] = ' ';
+//             disp2[15] = 'x';
+//         }
+//     } else {
+//         disp1[15] = ' ';
+//         disp2[15] = ' ';
+//     }
+//     if (pos == 0)
+//         disp1[0] = '>';
+//     else
+//         disp2[0] = '>';
+//     if (score >= 100) {
+//         print("Score100");
+//         spi1_dma_display1("Game over");
+//         spi1_dma_display2("You win");
+//         NVIC->ICER[0] = 1<<TIM17_IRQn;
+//         return;
+//     }
+//     char buf[9];
+//     snprintf(buf, 9, "Score% 3d", score);
+//     print(buf);
+//     spi1_dma_display1(disp1);
+//     spi1_dma_display2(disp2);
+//     TIM17->ARR = 250 - 1 - 2*score;
+// }
 
-void init_tim17(void)
-{
-    RCC->APB2ENR |= RCC_APB2ENR_TIM17EN;
-    TIM17->PSC = 48000 - 1;
-    TIM17->ARR = 250 - 1;
-    TIM17->CR1 |= TIM_CR1_ARPE;
-    TIM17->DIER |= TIM_DIER_UIE;
-    TIM17->CR1 |= TIM_CR1_CEN;
-}
+// void init_tim17(void)
+// {
+//     RCC->APB2ENR |= RCC_APB2ENR_TIM17EN;
+//     TIM17->PSC = 48000 - 1;
+//     TIM17->ARR = 250 - 1;
+//     TIM17->CR1 |= TIM_CR1_ARPE;
+//     TIM17->DIER |= TIM_DIER_UIE;
+//     TIM17->CR1 |= TIM_CR1_CEN;
+// }
 
 void init_spi2(void);
 void spi2_setup_dma(void);
@@ -288,7 +288,7 @@ void game(void)
     spi1_init_oled();
     spi1_setup_dma();
     spi1_enable_dma();
-    init_tim17(); // start timer
+    // init_tim17(); // start timer
     get_keypress(); // Wait for key to start
     spi1_dma_display1(">               ");
     spi1_dma_display2("                ");
