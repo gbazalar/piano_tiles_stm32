@@ -1026,7 +1026,7 @@ int main() {
     init_spi2();
     spi2_setup_dma();
     spi2_enable_dma();
-    init_tim15();
+    // init_tim15();
     lcd_initME();
     nano_wait(5000);
     clearME(0xffff); // clear screen to start
@@ -1046,13 +1046,30 @@ int main() {
     
     char string[32];
 
-    // read last high score from eeprom
+    // // read last high score from eeprom
     char lasthigh[32];
     eeprom_read(0, lasthigh, 32);
-    // use sscanf to convert char * lasthigh to int highscore
+    // // use sscanf to convert char * lasthigh to int highscore
     sscanf(lasthigh, "%d", &highscore);
     snprintf(string, sizeof(string), "%4d%4d", highscore, 0);
     print(string);
+    DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+    // DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+    
+    //music shit
+    init_usart5();
+    enable_tty_interrupt();
+    init_systick();
+    setup_tim7();
+    __enable_irq();
+    audio_mode = MODE_SD_CARD;
+    init_audio_playback();
+
+    while (1) {
+        //printf("Interrupt count: %lu\n", interrupt_counter);
+        refill_audio_buffer();  // Refills buffer when necessary
+        __WFI();                // Wait for interrupt
+     }
 
     int game = 1;
 
