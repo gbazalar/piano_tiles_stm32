@@ -7,14 +7,6 @@
   ******************************************************************************
 */
 
-/*******************************************************************************/
-
-// Fill out your username!  Even though we're not using an autotest, 
-// it should be a habit to fill out your username in this field now.
-const char* username = "griff323";
-
-/*******************************************************************************/ 
-
 #include "stm32f0xx.h"
 #include <stdint.h>
 
