@@ -24,9 +24,7 @@ SD card reader
 Audio amplifier
 7-segment display
 Development Tools:
-STM32CubeIDE
-ARM GCC Compiler
-Logic Analyzer (for debugging)
+VSCode Editor
 
 👥 Group Members: 
 subra114
