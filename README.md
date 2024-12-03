@@ -9,6 +9,7 @@ EEPROM for game data storage.
 SD card reader for extended memory.
 Audio amplifier for immersive sound effects.
 7-segment display for real-time game stats.
+
 📽️ Video Demonstration
 Watch the console in action: 
 https://purdue0-my.sharepoint.com/:v:/g/personal/vtummala_purdue_edu/EcG5YCXVxaFAkAbbKXSKs2kBRJClllbrvY8TcHwnms9yZA?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbFZpZXciOiJTaGFyZURpYWxvZy1MaW5rIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXcifX0%3D&e=noXIq0
